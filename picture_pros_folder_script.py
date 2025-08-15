@@ -75,8 +75,52 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+def is_printer_available(printer_name: str) -> bool:
+    """Check if a printer is available and connected."""
+    try:
+        import win32print
+        
+        # Get all printers
+        printers = win32print.EnumPrinters(win32print.PRINTER_ENUM_LOCAL | win32print.PRINTER_ENUM_CONNECTIONS)
+        
+        # Look for our printer
+        for printer in printers:
+            if printer[2] == printer_name:  # printer[2] is the printer name
+                # Check if printer is ready
+                try:
+                    handle = win32print.OpenPrinter(printer_name)
+                    printer_info = win32print.GetPrinter(handle, 2)  # Level 2 info
+                    win32print.ClosePrinter(handle)
+                    
+                    # Check printer status
+                    status = printer_info['Status']
+                    
+                    # Printer is available if it's not offline, error, or paused
+                    if status == 0:  # PRINTER_STATUS_READY
+                        logger.info(f"Printer {printer_name} is available and ready")
+                        return True
+                    else:
+                        logger.warning(f"Printer {printer_name} status: {status} (not ready)")
+                        return False
+                        
+                except Exception as e:
+                    logger.warning(f"Error checking printer {printer_name}: {e}")
+                    return False
+        
+        logger.warning(f"Printer {printer_name} not found in system")
+        return False
+        
+    except Exception as e:
+        logger.warning(f"Error enumerating printers: {e}")
+        return False
+
+
 def is_printer_free(printer_name: str) -> bool:
     """Check if a printer has finished its last job by checking Windows Event Logs."""
+    # First check if printer is available
+    if not is_printer_available(printer_name):
+        return False
+        
     try:
         # Open the print service operational log
         hand = win32evtlog.OpenEventLog(None, "Microsoft-Windows-PrintService/Operational")
@@ -97,20 +141,45 @@ def is_printer_free(printer_name: str) -> bool:
         
     except Exception as e:
         logger.warning(f"Error checking printer status for {printer_name}: {e}")
-        return True  # Assume free on error
+        return False  # Don't assume free on error - be more conservative
+
+
+def list_available_printers():
+    """List all available printers for debugging."""
+    try:
+        import win32print
+        
+        printers = win32print.EnumPrinters(win32print.PRINTER_ENUM_LOCAL | win32print.PRINTER_ENUM_CONNECTIONS)
+        logger.info("Available printers:")
+        for printer in printers:
+            logger.info(f"  - {printer[2]} (Status: {printer[3]})")
+    except Exception as e:
+        logger.error(f"Error listing printers: {e}")
 
 
 def get_free_printer_pair() -> Optional[Dict[str, str]]:
     """Get a free printer pair."""
+    logger.info("Checking for available printer pairs...")
+    
     for pair in PRINTER_PAIRS:
         photo_printer = PRINTER_FOLDER_MAP[pair["photo"]]
         label_printer = PRINTER_FOLDER_MAP[pair["label"]]
         
-        if is_printer_free(photo_printer) and is_printer_free(label_printer):
+        logger.info(f"Checking pair: {photo_printer} + {label_printer}")
+        
+        photo_available = is_printer_free(photo_printer)
+        label_available = is_printer_free(label_printer)
+        
+        logger.info(f"  Photo printer {photo_printer}: {'Available' if photo_available else 'Not available'}")
+        logger.info(f"  Label printer {label_printer}: {'Available' if label_available else 'Not available'}")
+        
+        if photo_available and label_available:
             PRINTER_STATUS[pair["photo"]] = "Busy"
             PRINTER_STATUS[pair["label"]] = "Busy"
+            logger.info(f"Found available pair: {pair['photo']} + {pair['label']}")
             return pair
     
+    logger.warning("No available printer pairs found")
     return None
 
 
@@ -240,6 +309,9 @@ def main():
         return
     
     logger.info(f"Starting file watcher for: {MASTER_FOLDER}")
+    
+    # List available printers for debugging
+    list_available_printers()
     
     # Create and start the observer
     event_handler = FileHandler(master_path)
