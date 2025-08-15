@@ -95,12 +95,36 @@ def is_printer_available(printer_name: str) -> bool:
                     # Check printer status
                     status = printer_info['Status']
                     
-                    # Printer is available if it's not offline, error, or paused
-                    if status == 0:  # PRINTER_STATUS_READY
+                    # Check for specific error conditions
+                    if status & 0x00000080:  # PRINTER_STATUS_OFFLINE
+                        logger.warning(f"Printer {printer_name} is OFFLINE")
+                        return False
+                    elif status & 0x00000002:  # PRINTER_STATUS_ERROR
+                        logger.warning(f"Printer {printer_name} has ERROR status")
+                        return False
+                    elif status & 0x00000001:  # PRINTER_STATUS_PAUSED
+                        logger.warning(f"Printer {printer_name} is PAUSED")
+                        return False
+                    elif status & 0x00001000:  # PRINTER_STATUS_NOT_AVAILABLE
+                        logger.warning(f"Printer {printer_name} is NOT_AVAILABLE")
+                        return False
+                    elif status & 0x00000008:  # PRINTER_STATUS_PAPER_JAM
+                        logger.warning(f"Printer {printer_name} has PAPER_JAM")
+                        return False
+                    elif status & 0x00000010:  # PRINTER_STATUS_PAPER_OUT
+                        logger.warning(f"Printer {printer_name} is OUT_OF_PAPER")
+                        return False
+                    elif status & 0x00000400:  # PRINTER_STATUS_PRINTING
+                        logger.info(f"Printer {printer_name} is currently PRINTING")
+                        return False
+                    elif status & 0x00000200:  # PRINTER_STATUS_BUSY
+                        logger.info(f"Printer {printer_name} is BUSY")
+                        return False
+                    elif status == 0:  # PRINTER_STATUS_READY
                         logger.info(f"Printer {printer_name} is available and ready")
                         return True
                     else:
-                        logger.warning(f"Printer {printer_name} status: {status} (not ready)")
+                        logger.warning(f"Printer {printer_name} has unknown status: {status}")
                         return False
                         
                 except Exception as e:
