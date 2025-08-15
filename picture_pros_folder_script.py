@@ -121,8 +121,21 @@ def is_printer_available(printer_name: str) -> bool:
                         logger.info(f"Printer {printer_name} is BUSY")
                         return False
                     elif status == 0:  # PRINTER_STATUS_READY
-                        logger.info(f"Printer {printer_name} is available and ready")
-                        return True
+                        # Check if printer is actually connected by testing port communication
+                        try:
+                            # Try to get printer capabilities - this will fail if printer is not physically connected
+                            handle = win32print.OpenPrinter(printer_name)
+                            # Just try to get basic info - this will fail if printer is disconnected
+                            test_info = win32print.GetPrinter(handle, 1)  # Level 1 info
+                            win32print.ClosePrinter(handle)
+                            
+                            # If we get here, the printer is actually connected
+                            logger.info(f"Printer {printer_name} is available and ready (physically connected)")
+                            return True
+                                
+                        except Exception as e:
+                            logger.warning(f"Printer {printer_name} appears to be disconnected: {e}")
+                            return False
                     else:
                         logger.warning(f"Printer {printer_name} has unknown status: {status}")
                         return False
