@@ -95,7 +95,7 @@ $Action = {
 
     Start-Sleep -Milliseconds 200
 
-    if ($using:ProcessedFiles.ContainsKey($Name)) { return }
+    if (ProcessedFiles.ContainsKey($Name)) { return }
 
     if ($Name -match "^photo(\d+).*") {
         $FileType = "Photo"
@@ -110,10 +110,8 @@ $Action = {
 
     Write-Host "Detected $FileType with ID $FileID for file: $Name"
 
-    $PhotoFile = Get-ChildItem $using:MasterFolder -Filter "photo$FileID*" |
-                 Where-Object { -not $using:ProcessedFiles.ContainsKey($_.Name) }
-    $LabelFile = Get-ChildItem $using:MasterFolder -Filter "label$FileID*" |
-                 Where-Object { -not $using:ProcessedFiles.ContainsKey($_.Name) }
+    $PhotoFile = Get-ChildItem $MasterFolder -Filter "photo$FileID*" | Where-Object { $_.Name -notin $ProcessedFiles.Keys }
+    $LabelFile = Get-ChildItem $MasterFolder -Filter "label$FileID*" | Where-Object { $_.Name -notin $ProcessedFiles.Keys }
 
     if (-not $PhotoFile -or -not $LabelFile) {
         Write-Host "Waiting for matching pair for ID $FileID"
@@ -133,8 +131,8 @@ $Action = {
         Move-Item $LabelFile.FullName -Destination "C:\Users\colem\Desktop\$($FreePair.Label)\"
         Write-Host "Moved photo and label ID $FileID to printer folders"
 
-        $using:ProcessedFiles[$PhotoFile.Name] = $true
-        $using:ProcessedFiles[$LabelFile.Name] = $true
+        ProcessedFiles[$PhotoFile.Name] = $true
+        ProcessedFiles[$LabelFile.Name] = $true
 
         $LastPrintedDocument[$PrinterFolderMap[$FreePair.Photo]] = $PhotoFile.Name
         $LastPrintedDocument[$PrinterFolderMap[$FreePair.Label]] = $LabelFile.Name
